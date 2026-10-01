@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FloorFit - How many boxes of flooring</title>
+<style>
+  * { box-sizing:border-box; margin:0; padding:0; }
+  body { font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif; background:#1c1810; color:#f3ecdc; line-height:1.5; }
+  .wrap { max-width:640px; margin:0 auto; padding:26px 18px 60px; }
+  a { color:#e0a84a; } h1 { font-size:28px; } h1 span { color:#e0a84a; } .sub { color:#bfb394; margin:4px 0 18px; }
+  .card { background:#2b2517; border-radius:14px; padding:16px; margin-bottom:14px; }
+  label { display:block; font-size:13px; color:#bfb394; margin:10px 0 4px; }
+  input, select { width:100%; padding:11px; border-radius:9px; border:1px solid #514729; background:#1c1810; color:#f3ecdc; font-size:16px; }
+  .row { display:flex; gap:8px; align-items:flex-end; } .row > div { flex:1; }
+  button { padding:11px 14px; border-radius:9px; border:1px solid #514729; background:#1c1810; color:#e0a84a; font-size:14px; cursor:pointer; }
+  button.main { background:#e0a84a; color:#1c1810; font-weight:700; border-color:#e0a84a; margin-top:10px; }
+  .big { font-size:44px; font-weight:800; color:#e0a84a; } .lbl { font-size:13px; color:#bfb394; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:12px; } .grid b { display:block; font-size:20px; }
+  .note { font-size:14px; color:#e3d8bd; margin-top:10px; } h2 { font-size:17px; margin-bottom:8px; } .small { font-size:13px; color:#bfb394; }
+  .warn { background:#3d2a20; border:1px solid #b9703f; color:#ffddc4; padding:12px; border-radius:10px; margin-top:12px; font-size:14px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Floor<span>Fit</span></h1>
+  <div class="sub">Measure the room, pick the layout, get the number of boxes to buy.</div>
+  <div class="card">
+    <h2>Rooms (feet)</h2>
+    <div id="rooms"></div>
+    <button id="add">+ Add a rectangle</button> <button id="addsub">+ Subtract a block (island, closet)</button>
+    <div class="row"><div><label for="box">Coverage per box (sq ft)</label><input id="box" type="number" min="1" step="0.01" value="20"></div><div><label for="price">Price per box (optional)</label><input id="price" type="number" min="0" step="0.01" placeholder="e.g. 55"></div></div>
+    <label for="lay">Layout</label>
+    <select id="lay"><option value="tight">Straight lay, simple room (5%)</option><option value="straight" selected>Straight lay, typical (10%)</option><option value="diagonal">Diagonal (15%)</option><option value="herringbone">Herringbone (15%)</option></select>
+  </div>
+  <div class="card" id="out"></div>
+  <div class="card"><h2>About this</h2><div class="small">Area = length &times; width; add the waste allowance, divide by box coverage and round up to whole boxes. Waste percentages are common rules of thumb (5 to 15%), not a standard; check your product's spec sheet for its coverage and your installer's advice for tricky layouts. Buying one box more than the minimum is common, because later batches can differ in colour. Worked example matches <a href="https://tradesppl.com/tools/flooring-calculator">tradesppl.com</a>: 12 &times; 15 ft, 10% waste, 20 sq ft boxes gives 10 boxes. <a href="index.html">About</a></div></div>
+</div>
+<script src="engine.js"></script>
+<script>
+var $ = function (i) { return document.getElementById(i); }, rows = [{ l: 12, w: 15, sub: false }];
+function drawRooms() {
+  var h = ''; rows.forEach(function (r, i) { h += '<div class="row" data-i="' + i + '"><div><label>' + (r.sub ? 'Subtract: length' : 'Length') + '</label><input class="rl" type="number" min="0" step="0.1" value="' + r.l + '"></div><div><label>Width</label><input class="rw" type="number" min="0" step="0.1" value="' + r.w + '"></div>' + (rows.length > 1 ? '<div style="flex:0 0 auto"><button class="rm">&times;</button></div>' : '') + '</div>'; });
+  $('rooms').innerHTML = h;
+  Array.prototype.forEach.call($('rooms').querySelectorAll('.row'), function (el) { var i = +el.getAttribute('data-i');
+    el.querySelector('.rl').oninput = function () { rows[i].l = parseFloat(this.value) || 0; render(); }; el.querySelector('.rw').oninput = function () { rows[i].w = parseFloat(this.value) || 0; render(); };
+    var rm = el.querySelector('.rm'); if (rm) rm.onclick = function () { rows.splice(i, 1); drawRooms(); render(); }; });
+}
+function render() {
+  var per = parseFloat($('box').value), price = parseFloat($('price').value), w = Floor.LAYOUTS[$('lay').value];
+  if (!(per > 0)) { $('out').innerHTML = '<div class="lbl">Enter the coverage per box.</div>'; return; }
+  var p = Floor.plan(rows, w, per, isNaN(price) ? null : price);
+  if (!(p.area > 0)) { $('out').innerHTML = '<div class="warn">Net area is zero or negative. Check the rectangles.</div>'; return; }
+  var h = '<div class="lbl">Buy at least</div><div class="big" id="boxes">' + p.boxes + ' boxes</div>';
+  h += '<div class="grid"><div><span class="lbl">Room area</span><b id="area">' + p.area.toFixed(1) + ' sq ft</b></div><div><span class="lbl">With ' + Math.round(w * 100) + '% waste</span><b id="need">' + p.need.toFixed(1) + ' sq ft</b></div><div><span class="lbl">Boxes cover</span><b>' + p.covers.toFixed(1) + ' sq ft</b></div><div><span class="lbl">Spare after install</span><b>' + p.spare.toFixed(1) + ' sq ft (' + Math.round(p.sparePct * 100) + '%)</b></div>' + (p.cost != null ? '<div><span class="lbl">Cost, ' + p.boxes + ' boxes</span><b id="cost">' + p.cost.toFixed(2) + '</b></div><div><span class="lbl">With 1 extra box</span><b>' + (p.cost + price).toFixed(2) + '</b></div>' : '') + '</div>';
+  if (p.covers - p.need < per * 0.1) h += '<div class="warn" id="tight">The last box is nearly all used. Consider one extra box for mistakes and future repairs.</div>';
+  $('out').innerHTML = h;
+}
+$('add').onclick = function () { rows.push({ l: 10, w: 10, sub: false }); drawRooms(); render(); };
+$('addsub').onclick = function () { rows.push({ l: 3, w: 4, sub: true }); drawRooms(); render(); };
+['box', 'price', 'lay'].forEach(function (i) { $(i).oninput = render; $(i).onchange = render; });
+drawRooms(); render();
+</script>
+</body>
+</html>
